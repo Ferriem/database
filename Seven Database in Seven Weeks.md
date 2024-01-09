@@ -418,6 +418,311 @@ If the destination database has the value of the key, move will fail and return 
 
 `rename` `type` `del` `flushdb` `flushall`
 
-#### Warm-up 
+#### Warp-up 
 
 Redis can act as a stack, queue, or priority queue (list, sorted set); can be an object store(hash); and even can perform complex set operations such as unions, intersections, and subtractions(diff). It provides many atomic commands, and for those multistep commands, it provides transaction mechanism. It has a built-in ability to expire keys, which is useful as a cache.
+
+### Advanced Usage, Distribution
+
+#### Simple interface
+
+##### Telnet
+
+We can interact without the command-line interface by streaming commands through TCP on our own via telnet and terminating the command with a varriage return line feed (CRLF, or \r\n).
+
+```sh
+~/ telnet localhost 6379
+Trying 127.0.0.1...
+Connected to localhost.
+Escape character is '^]'.
+set test hello
++OK
+get test
+$5
+hello
+sadd stest 1 99
+:2
+smembers stest
+*2
+$1
+1
+$2
+99
+```
+
+- Redis streams the `OK` status prefixed by a `+` sign
+- Before it returned the string hello, it send `$5`, which means the following string is five characters.
+- The number 2 after we add 2 set items to the test key is prefixed by `:` to represent an integer(two values were added).
+- When we requested two items, the first line returned begins with an asterisk and the number 2--meaning there are two complex values about to be returned.
+
+##### Pipelining
+
+We can also stream our own strings one at a time by using the BSD netcat (nc) command. With netcat, we must specifically end a line with CRLF. Some nc implement have a -q option, thus negating the need for a sleep.
+
+```sh
+~/ (echo "ping\r\nping\r\nping\r\n") | nc localhost 6379
++PONG
++PONG
++PONG
+```
+
+Remember to end every command with `\r\n`.
+
+#### Publish-subscribe
+
+Previous blocking queue using the list datatype is a very basic publish-subscribe model. Under many circumstances we want a slightly inverted behavior, where several subscribers want to read the announcements of a single publisher. Redis provides some specialized publish-subcribe commands.
+
+Start with some subscribers that connect to a key, known as a channel in pub-sub nomenclature.
+
+```sh
+#subscriber
+127.0.0.1:6379> subscribe comments
+1) "subscribe"
+2) "comments"
+3) (integer) 1
+
+#pulisher
+127.0.0.1:6379> publish comments "Check out this shortcoded site! 7wks"
+(integer) 2
+
+#subscriber
+1) "message"
+2) "comments"
+3) "Check out this shortcoded site! 7wks"
+```
+
+```sh
+127.0.0.1:6379(subscribed mode)> unsubscribe comments
+1) "unsubscribe"
+2) "comments"
+3) (integer) 0
+```
+
+`unsubscribe` to no longer receive correspondence. Or press `CTRL+C` to break connection.
+
+#### Server Info
+
+```sh
+127.0.0.1:6379> info
+# Server
+....
+```
+
+#### Redis Configuration
+
+The `redis.conf` file that comes with the distribution--found in `/etc/redis` is fairly self explanatory. (`/opt/homebrew/etc/redis.conf` Mac) 
+
+```
+daemonize no
+port 6379
+loglevel verbose
+logfile stdout
+database 16
+```
+
+By default `daemonize` is set to no, which is why
+
+`loglevel` defaults to `verbose`, but it's good to set it to `notice` or `warning` in production.
+
+`database` sets the number of Redis databases we have available.
+
+##### Durability
+
+Redis has a few persistence options.
+
+- No persistence: keep all values in main memory. If you are running a basic caching server, this is a reasonable choice since durability always increases latency.
+
+Redis apply [memcached](https://www.memcached.org/) as its built-in support for storing values to disk. Key-value pairs are only occasionally saved. You can run the `lastsave` command to get a Unix timestamp. Or you can read the `last_save_time`from the server `INFO` output.
+
+`save` to force durability.
+
+##### Snapshotting
+
+`save 300 1` to trigger a save every 300s if any keys change. 300->time, 1 -> changed key num.
+
+##### Append-Only File
+
+Redis is eventually durable by default in that it asynchronously writes values to disk in intervals defined by our save settings, or it is forced to write by client-initiated commands. This is acceptable for a second-level cache but is insufficient for storing data you need to be durable. If a Redis server crashes, users might get wrong data.
+
+Redis provides an append-only file (`appendonly.aof`) that keeps a record of all write commands. This is like the write-ahead logging. If the server crashes before a value is saved, it executes the commands on staryup, restoring its state; `appendonly` must be enabled by setting it to `yes` in the `redis.conf` file.
+
+```
+# appendfsync always
+appendfsync everysec
+# appendfsync no
+```
+
+Then we need to decide how often a command is appended to the file. The default `everysec` still facing potential risk of data loss in the event of a server crash.
+
+##### Security
+
+Although Redis provides `requirepass` setting and `AUTH` command, they are safely ignored. Since a client can try nearly 100,000 passwords a second. Beyond the fact that plain-text passwords are inherently umsafe anyway. If you want Redis security, you're better off with a good firewall and SSH security.
+
+
+
+```
+rename-command FLUSHALL c283d93ac9528f986023793b411e4ba2
+```
+
+Redis provides command-level security through obscurity, by allowing you to hide or suppress commands. With `rename-command` in `redis.conf`. If we attempt to execute `FLUSHALL` against this server, we'll be hit with an error. Or better yet, we can disable the command entirely by setting it to a blank string
+
+##### Tweaking Parameters
+
+```sh
+~/ redis-benchmark -n 100000
+```
+
+To test benchmark.
+
+#### Master-Slave Replication
+
+Just like other NoSQL database, Redis supports master-slaver replication. One server is the master by default if you don't set it as a slave of anything. Data will be replicated to any number of slave servers.
+
+```sh
+~/ cp redis.conf redis-s1.conf
+```
+
+```
+port 6380
+slave of 127.0.0.1 6379
+```
+
+```sh
+#create a replica of matser(6379)
+~/ redis-server redis-s1.conf
+27136:S 08 Jan 2024 20:41:15.082 * Connecting to MASTER 127.0.0.1:6379
+27136:S 08 Jan 2024 20:41:15.083 * MASTER <-> REPLICA sync started
+27136:S 08 Jan 2024 20:41:15.083 * Non blocking connect for SYNC fired the event.
+27136:S 08 Jan 2024 20:41:20.982 * MASTER <-> REPLICA sync: receiving streamed RDB from master with EOF to disk
+27136:S 08 Jan 2024 20:41:20.996 * MASTER <-> REPLICA sync: Flushing old data
+27136:S 08 Jan 2024 20:41:20.996 * MASTER <-> REPLICA sync: Loading DB in memory
+27136:S 08 Jan 2024 20:41:21.010 * MASTER <-> REPLICA sync: Finished with success
+
+
+127.0.0.1:6379> sadd meetings "StarTrek Pastry Chefs" "LARPers Intl."
+(integer) 2
+127.0.0.1:6380> smembers meetings
+1) "StarTrek Pastry Chefs"
+2) "LARPers Intl."
+```
+
+#### Data Dump
+
+To insert a large dataset into Redis server. Use a pipeline to flush a set of data into Redis is faster than push them one by one.
+
+#### Redis Cluster
+
+To create Cluster, first prepare at least three server to compose a cluster.
+
+Copy the initial config file and modify it.
+
+```conf
+port 7000
+cluster-enabled yes
+cluster-config-file nodes_7000.conf
+cluster-node-timeout 5000
+appendonly yes
+```
+
+Before the server create, please check the port isn't used now.
+
+```sh
+#create three cluster server
+~/ redis-server redis_7000.conf
+~/ redis-server redis_7001.conf
+~/ redis-server redis_7002.conf
+
+#create cluster
+~/ redis-cli --cluster create 127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002 --cluster-replicas 0
+>>> Performing hash slots allocation on 3 nodes...
+Master[0] -> Slots 0 - 5460
+Master[1] -> Slots 5461 - 10922
+Master[2] -> Slots 10923 - 16383
+M: 6e4f871351e234777253c5e8d1db6269a5546df3 127.0.0.1:7000
+   slots:[0-5460] (5461 slots) master
+M: f18b68424d28fae62eeb601b8faf1ade9fab22c8 127.0.0.1:7001
+   slots:[5461-10922] (5462 slots) master
+M: 2ee735817c23372cf1a9ae95649d58ef5aa05e23 127.0.0.1:7002
+   slots:[10923-16383] (5461 slots) master
+Can I set the above configuration? (type 'yes' to accept): yes
+>>> Nodes configuration updated
+>>> Assign a different config epoch to each node
+>>> Sending CLUSTER MEET messages to join the cluster
+Waiting for the cluster to join
+......
+>>> Performing Cluster Check (using node 127.0.0.1:7000)
+M: 6e4f871351e234777253c5e8d1db6269a5546df3 127.0.0.1:7000
+   slots:[0-5460] (5461 slots) master
+M: f18b68424d28fae62eeb601b8faf1ade9fab22c8 127.0.0.1:7001
+   slots:[5461-10922] (5462 slots) master
+M: 2ee735817c23372cf1a9ae95649d58ef5aa05e23 127.0.0.1:7002
+   slots:[10923-16383] (5461 slots) master
+[OK] All nodes agree about slots configuration.
+>>> Check for open slots...
+>>> Check slots coverage...
+[OK] All 16384 slots covered.
+```
+
+If you set replicas to a non-zero number, you need to add the server number. Eg. `redis-cli --cluster create 127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002 --cluster-replicas 1` you need 6 server and half of them will become slave.
+
+```sh
+~/ redis-cli -p 7001
+127.0.0.1:7001> set ferriem 1
+(error) MOVED 13328 127.0.0.1:7002
+127.0.0.1:7001> get ferriem
+(error) MOVED 13328 127.0.0.1:7002
+```
+
+We cannot set the value in this case, if we want to modify the key/value information we need `redis-cli -c(--cluster) -p 7001`
+
+```sh
+~/ redis-cli -c -p 7001
+127.0.0.1:7001> get ferriem
+-> Redirected to slot [13328] located at 127.0.0.1:7002
+"123"
+127.0.0.1:7002> set ferriem 125
+OK
+127.0.0.1:7002> get ferriem
+"125"
+```
+
+We can know that the key will only apply to one member in the cluster. In a redis cluster, data is divided into hash slots, and each nodes is responsible for a subset of these hash slots.
+
+When delete the cluster. (maybe not the most convenient)
+
+- `flushall` in each server
+- `cluster reset` in each server
+- `shutdown` each server
+- Delete `nodes_700x` of each server `rm -f nodes_700x`
+
+#### Bloom Filters
+
+Converting a value into a vary sparse sequence of bits. When inserting a word, if one of the bits if false, means the value was never added.
+
+For redis, there are two relatively recent commands that perform just such actions: `SETBIT` and `GETBIT`.
+
+```sh
+127.0.0.1:6379> setbit my_burger 0 1
+(integer) 0
+127.0.0.1:6379> setbit my_burger 3 1
+(integer) 0
+127.0.0.1:6379> getbit my_burger 0
+(integer) 1
+127.0.0.1:6379> getbit my_burger 1
+(integer) 0
+127.0.0.1:6379> getbit my_burger 2
+(integer) 0
+127.0.0.1:6379> getbit my_burger 3
+(integer) 1
+```
+
+#### Homework
+
+Find:
+
+- Publish/Subscribe: `PUBLISH` `SUBSCRIBE`
+- Message Queue:  `LPUSH` `BLPOP` `BRPOP`
+- Request/Reply: `SET` `GET`
+- Task Queue: `BRPOP` `BLPOP`
+- Caching: `SET` `GET`
+

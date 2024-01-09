@@ -23,4 +23,5 @@ func main() {
 	} else {
 		fmt.Println(val)
 	}
+	Rdb.Close()
 }

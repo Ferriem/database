@@ -58,5 +58,6 @@ func main() {
 	for _, member := range zSetMembers {
 		fmt.Printf("Member: %s, Score: %v\n", member.Member, member.Score)
 	}
+	Rdb.Close()
 
 }
