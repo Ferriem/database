@@ -9,7 +9,7 @@ import (
 
 func main() {
 	rdb := redis.NewClusterClient(&redis.ClusterOptions{
-		Addrs: []string{":7000", ":7001", ":7002"},
+		Addrs: []string{":7000", ":7001", ":7002", ":7003", ":7004", ":7005"},
 	})
 	ctx := context.Background()
 	err := rdb.ForEachShard(ctx, func(ctx context.Context, shard *redis.Client) error {
@@ -17,6 +17,8 @@ func main() {
 	})
 	if err != nil {
 		log.Fatal(err)
+	} else {
+		log.Println("Connected!")
 	}
 	err = rdb.Set(ctx, "ferriem", "123", 0).Err()
 	if err != nil {

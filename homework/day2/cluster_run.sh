@@ -6,11 +6,6 @@ reset_and_flush() {
     redis-cli -p $1 flushall
 }
 
-# Shut down existing Redis instances
-for port in {7000..7005}; do
-    redis-cli -p $port shutdown
-done
-
 # Remove configuration files
 rm -f nodes_{7000..7005}.conf
 
