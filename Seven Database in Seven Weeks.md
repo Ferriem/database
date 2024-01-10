@@ -627,43 +627,98 @@ appendonly yes
 Before the server create, please check the port isn't used now.
 
 ```sh
-#create three cluster server
-~/ redis-server redis_7000.conf
-~/ redis-server redis_7001.conf
-~/ redis-server redis_7002.conf
+#!/bin/bash
 
+# Function to execute cluster reset and flushall
+reset_and_flush() {
+    redis-cli -p $1 cluster reset
+    redis-cli -p $1 flushall
+}
+
+# Shut down existing Redis instances
+for port in {7000..7005}; do
+    redis-cli -p $port shutdown
+done
+
+# Remove configuration files
+rm -f nodes_{7000..7005}.conf
+
+# Start new Redis instances
+for port in {7000..7005}; do
+    redis-server redis_${port}.conf &
+done
+
+# Wait for Redis instances to start (you may need to adjust the sleep duration)
+sleep 5
+
+# Execute cluster reset and flushall for each Redis instance
+for port in {7000..7005}; do
+    reset_and_flush $port
+done
+
+echo "Redis is running..."
+
+# Optionally, you can uncomment the following line to create the cluster
+# redis-cli --cluster create 127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002 127.0.0.1:7003 127.0.0.1:7004 127.0.0.1:7005 --cluster-replicas 1
+
+```
+
+
+
+```sh
 #create cluster
-~/ redis-cli --cluster create 127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002 --cluster-replicas 0
->>> Performing hash slots allocation on 3 nodes...
+~/ redis-cli --cluster create 127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002 127.0.0.1:7003 127.0.0.1:7004 127.0.0.1:7005  --cluster-replicas 1
+>>> Performing hash slots allocation on 6 nodes...
 Master[0] -> Slots 0 - 5460
 Master[1] -> Slots 5461 - 10922
 Master[2] -> Slots 10923 - 16383
+Adding replica 127.0.0.1:7004 to 127.0.0.1:7000
+Adding replica 127.0.0.1:7005 to 127.0.0.1:7001
+Adding replica 127.0.0.1:7003 to 127.0.0.1:7002
+>>> Trying to optimize slaves allocation for anti-affinity
+[WARNING] Some slaves are in the same host as their master
 M: 6e4f871351e234777253c5e8d1db6269a5546df3 127.0.0.1:7000
    slots:[0-5460] (5461 slots) master
 M: f18b68424d28fae62eeb601b8faf1ade9fab22c8 127.0.0.1:7001
    slots:[5461-10922] (5462 slots) master
 M: 2ee735817c23372cf1a9ae95649d58ef5aa05e23 127.0.0.1:7002
    slots:[10923-16383] (5461 slots) master
+S: 98e71b8b03f9de762eb237d41e27e274363af397 127.0.0.1:7003
+   replicates 6e4f871351e234777253c5e8d1db6269a5546df3
+S: 1e22086fdc7d389a4cd205c8d3bf4cba356dffe9 127.0.0.1:7004
+   replicates f18b68424d28fae62eeb601b8faf1ade9fab22c8
+S: 1d7eff54b357b7d9b0d7a7f1850a1f10da5cbf41 127.0.0.1:7005
+   replicates 2ee735817c23372cf1a9ae95649d58ef5aa05e23
 Can I set the above configuration? (type 'yes' to accept): yes
 >>> Nodes configuration updated
 >>> Assign a different config epoch to each node
 >>> Sending CLUSTER MEET messages to join the cluster
 Waiting for the cluster to join
-......
+
 >>> Performing Cluster Check (using node 127.0.0.1:7000)
 M: 6e4f871351e234777253c5e8d1db6269a5546df3 127.0.0.1:7000
    slots:[0-5460] (5461 slots) master
+   1 additional replica(s)
 M: f18b68424d28fae62eeb601b8faf1ade9fab22c8 127.0.0.1:7001
    slots:[5461-10922] (5462 slots) master
+   1 additional replica(s)
 M: 2ee735817c23372cf1a9ae95649d58ef5aa05e23 127.0.0.1:7002
    slots:[10923-16383] (5461 slots) master
+   1 additional replica(s)
+S: 1e22086fdc7d389a4cd205c8d3bf4cba356dffe9 127.0.0.1:7004
+   slots: (0 slots) slave
+   replicates f18b68424d28fae62eeb601b8faf1ade9fab22c8
+S: 98e71b8b03f9de762eb237d41e27e274363af397 127.0.0.1:7003
+   slots: (0 slots) slave
+   replicates 6e4f871351e234777253c5e8d1db6269a5546df3
+S: 1d7eff54b357b7d9b0d7a7f1850a1f10da5cbf41 127.0.0.1:7005
+   slots: (0 slots) slave
+   replicates 2ee735817c23372cf1a9ae95649d58ef5aa05e23
 [OK] All nodes agree about slots configuration.
 >>> Check for open slots...
 >>> Check slots coverage...
 [OK] All 16384 slots covered.
 ```
-
-If you set replicas to a non-zero number, you need to add the server number. Eg. `redis-cli --cluster create 127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002 --cluster-replicas 1` you need 6 server and half of them will become slave.
 
 ```sh
 ~/ redis-cli -p 7001
@@ -688,12 +743,7 @@ OK
 
 We can know that the key will only apply to one member in the cluster. In a redis cluster, data is divided into hash slots, and each nodes is responsible for a subset of these hash slots.
 
-When delete the cluster. (maybe not the most convenient)
-
-- `flushall` in each server
-- `cluster reset` in each server
-- `shutdown` each server
-- Delete `nodes_700x` of each server `rm -f nodes_700x`
+If we consult `get` in slave, it will return that the data stored in matser. Check `cluster slots` found that slave didn't responsible for any slot. When a master breakdown, the nearest slave will be promoted to master and have the same slots and data.
 
 #### Bloom Filters
 

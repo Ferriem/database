@@ -1,1 +1,11 @@
-Mainly record the usage of Redis, [notes](./Seven Database in Seven Weeks.md) in detail.
+# Redis
+
+Mainly record the usage of Redis.
+
+- [ ] Hash
+- [ ] List
+- [ ] Set
+- [ ] Zset
+- [ ] Pub-Sub
+- [ ] Master-Slave
+- [ ] Cluster
