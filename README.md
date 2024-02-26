@@ -9,3 +9,17 @@ Mainly record the usage of Redis.
 - [ ] Pub-Sub
 - [ ] Master-Slave
 - [ ] Cluster
+
+# MySQL
+
+- [ ] Query
+- [ ] Delete
+- [ ] Update
+- [ ] Constraints
+- [ ] Lock
+- [ ] Procedure
+- [ ] Condition
+- [ ] Loop
+- [ ] Prepare
+- [ ] Transaction
+- [ ] Index
