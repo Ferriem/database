@@ -1,0 +1,54 @@
+Connected to the database
+
+Database tables
+--------------
+customers
+employees
+offices
+orderdetails
+orders
+payments
+productlines
+products
+--------------
+
+employees columns
+------------------------------------------------------------
+employeeNumber            int             NO   PRI NULL                 
+lastName                  varchar(50)     NO       NULL                 
+firstName                 varchar(50)     NO       NULL                 
+extension                 varchar(10)     NO       NULL                 
+email                     varchar(100)    NO       NULL                 
+officeCode                varchar(10)     NO   MUL NULL                 
+reportsTo                 int             YES  MUL NULL                 
+jobTitle                  varchar(50)     NO       NULL                 
+------------------------------------------------------------
+
+employees content
+------------------------------------------------------------
+lastName       firstName      
+------------------------------------------------------------
+Murphy         Diane          
+Patterson      Mary           
+Firrelli       Jeff           
+Patterson      William        
+Bondur         Gerard         
+Bow            Anthony        
+Jennings       Leslie         
+Thompson       Leslie         
+Firrelli       Julie          
+Patterson      Steve          
+Tseng          Foon Yue       
+Vanauf         George         
+Bondur         Loui           
+Hernandez      Gerard         
+Castillo       Pamela         
+Bott           Larry          
+Jones          Barry          
+Fixter         Andy           
+Marsh          Peter          
+King           Tom            
+Nishi          Mami           
+Kato           Yoshimi        
+Gerard         Martin         
+------------------------------------------------------------

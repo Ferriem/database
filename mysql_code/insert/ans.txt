@@ -1,0 +1,8 @@
+Connected to the database
+
+Inserted into subscribers table
+Inserted into subscribers table
+subscribers table
+--------------
+1 john.doe@gmail.com
+--------------
